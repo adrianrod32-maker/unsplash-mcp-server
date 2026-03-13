@@ -19,8 +19,7 @@ const PORT = process.env.PORT || 3000;
 const BASE_URL = "https://api.unsplash.com";
 
 if (!ACCESS_KEY) {
-  console.error("ERROR: Set UNSPLASH_ACCESS_KEY in your Glitch environment variables (.env tab)");
-  process.exit(1);
+  console.warn("WARNING: UNSPLASH_ACCESS_KEY environment variable is not set — API calls will return errors until configured in Railway Variables tab");
 }
 
 // ─── Unsplash API Client ──────────────────────────────────────────────────────
