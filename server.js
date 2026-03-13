@@ -427,14 +427,37 @@ app.get("/health", (req, res) => {
 });
 
 app.all("/mcp", async (req, res) => {
-  const transport = new StreamableHTTPServerTransport({
-    sessionIdGenerator: undefined,
-    enableJsonResponse: true
-  });
-  res.on("close", () => transport.close());
-  const server = buildServer();
-  await server.connect(transport);
-  await transport.handleRequest(req, res, req.body);
+  // The MCP SDK v1.10+ uses @hono/node-server which reads req.rawHeaders (not req.headers)
+  // when converting to a Web Standard Request. Claude's connector doesn't send text/event-stream
+  // in the Accept header, which causes a 406 "Not Acceptable" error. Patch rawHeaders to fix this.
+  const currentAccept = req.headers['accept'] || '';
+  if (!currentAccept.includes('text/event-stream') || !currentAccept.includes('application/json')) {
+    const newAccept = 'application/json, text/event-stream';
+    req.headers['accept'] = newAccept;
+    let found = false;
+    for (let i = 0; i < req.rawHeaders.length; i += 2) {
+      if (req.rawHeaders[i].toLowerCase() === 'accept') {
+        req.rawHeaders[i + 1] = newAccept;
+        found = true;
+        break;
+      }
+    }
+    if (!found) req.rawHeaders.push('Accept', newAccept);
+  }
+
+  try {
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: undefined,
+      enableJsonResponse: true
+    });
+    res.on("close", () => transport.close());
+    const server = buildServer();
+    await server.connect(transport);
+    await transport.handleRequest(req, res, req.body);
+  } catch (err) {
+    console.error('[MCP ERROR]', err.message, err.stack);
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
 });
 
 app.listen(PORT, () => {
